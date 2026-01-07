@@ -1,0 +1,31 @@
+name: Daily Music Search
+
+on:
+  schedule:
+    # 毎日22時（日本時間）= UTC 13時
+    - cron: "0 13 * * *"
+  workflow_dispatch: # 手動実行も可能
+
+jobs:
+  music-search:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run music-search
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: "/music-search"
+          claude_args: "--max-turns 20"
+
+      - name: Commit and push results
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add docs/
+          git diff --staged --quiet || git commit -m "Add daily music release report"
+          git push
