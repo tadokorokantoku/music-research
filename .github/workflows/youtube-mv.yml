@@ -1,0 +1,35 @@
+name: Daily YouTube MV Search
+
+on:
+  schedule:
+    # 毎日10時（日本時間）= UTC 1時
+    - cron: "0 1 * * *"
+  workflow_dispatch: # 手動実行も可能
+
+permissions:
+  contents: write
+
+jobs:
+  youtube-mv:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run youtube-mv
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: "/youtube-mv"
+          claude_args: "--max-turns 20 --allowedTools Bash,Read,Write,Edit,WebFetch,Glob,Grep"
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+
+      - name: Commit and push results
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add docs/
+          git diff --staged --quiet || git commit -m "Add daily YouTube MV report"
+          git push
