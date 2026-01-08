@@ -1,9 +1,9 @@
-name: Daily YouTube MV Search
+name: Hourly YouTube MV Search
 
 on:
   schedule:
-    # 毎日10時（日本時間）= UTC 1時
-    - cron: "0 1 * * *"
+    # 毎時（JST 8:00-24:00 = UTC 23:00-15:00）
+    - cron: "0 23,0-15 * * *"
   workflow_dispatch: # 手動実行も可能
 
 permissions:
@@ -21,7 +21,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          prompt: "/youtube-mv"
+          prompt: "/youtube-mv 1"
           claude_args: "--max-turns 20 --allowedTools Bash,Read,Write,Edit,WebFetch,Glob,Grep"
         env:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
@@ -31,5 +31,5 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add docs/
-          git diff --staged --quiet || git commit -m "Add daily YouTube MV report"
+          git diff --staged --quiet || git commit -m "Add hourly YouTube MV report"
           git push
