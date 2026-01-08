@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(music-search)",
+      "Skill(youtube-mv)",
+      "WebFetch(domain:natalie.mu)",
+      "WebFetch(domain:www.barks.jp)",
+      "WebFetch(domain:ototoy.jp)",
+      "WebFetch(domain:www.googleapis.com)",
+      "Bash(echo:*)",
+      "Bash(python3:*)",
+      "Bash(cat:*)"
+    ]
+  }
+}

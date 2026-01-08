@@ -1,265 +1,264 @@
 ---
-description: YouTube Data APIを使って今日投稿された日本の音楽MV動画を効率的に収集し、スコアリングしてレポートを作成する（再生リスト分析に基づく最適化版）
+description: YouTube Data APIを使って今日投稿された日本の音楽MV動画を効率的に収集し、2軸スコアリングしてレポートを作成する
 ---
 
-YouTube Data APIを使って、今日投稿された日本の音楽MV動画を**最適化されたクエリ**で検索し、MVスコアリングでノイズを除去してレポートを作成してください。
+# youtube-mv
+
+YouTube Data APIを使って、今日投稿された日本の音楽MV動画を検索し、2軸スコアリング（MVスコア × 日本スコア）でノイズを除去してレポートを作成します。
+
+## 概要
+
+このコマンドは3つのサブコマンドを順番に実行します:
+
+1. **`/youtube-mv-fetch`**: データ取得
+2. **`/youtube-mv-score-mv`**: MVスコアリング（0-100点）
+3. **`/youtube-mv-score-japan`**: 日本スコアリング（0-100点）
+4. **レポート生成**: 2軸スコアでフィルタリング・分類
+
+## 実行手順
+
+### Step 1: データ取得
+
+```
+/youtube-mv-fetch
+```
+
+**実行内容**:
+- YouTube Data API v3で検索（3クエリ × 1ページ）
+- videos.listで動画詳細取得
+- channels.listでチャンネル情報取得
+- JSON出力: `/tmp/videos_{YYMMDD}.json`, `/tmp/channels_{YYMMDD}.json`
+
+**APIコスト**: 約306 units
+
+### Step 2: MVスコアリング
+
+```
+/youtube-mv-score-mv
+```
+
+**実行内容**:
+- タイトル、制作クレジット、公式性、長さを評価
+- 0-100点のMVスコアを計算
+- JSON出力: `/tmp/mv_scores_{YYMMDD}.json`
+
+**評価項目**:
+- タイトルキーワード（MV, Music Video）
+- 制作クレジット（厳格化: 正規表現で「監督: ○○」形式）
+- 公式性（Official, 公式ch）
+- 長さ（3-5分が標準）
+- AI生成検出（-20点）
+
+### Step 3: 日本スコアリング
+
+```
+/youtube-mv-score-japan
+```
+
+**実行内容**:
+- チャンネル国、言語設定、日本語比率を評価
+- 0-100点の日本スコアを計算
+- JSON出力: `/tmp/japan_scores_{YYMMDD}.json`
+
+**評価項目**:
+- チャンネル国=JP（即100点）
+- defaultLanguage=ja（+80点）
+- タイトル日本語（+30点）
+- 日本記号【】（+10点）
+- 説明文日本語比率
+
+### Step 4: レポート生成
+
+スコアをマージして最終レポートを生成します。
+
+#### 4.1 スコアマージ
+
+```python
+#!/usr/bin/env python3
+import json
+from datetime import datetime, timezone, timedelta
+
+# 日付
+jst = timezone(timedelta(hours=9))
+target_date = datetime.now(jst) - timedelta(days=1)  # 前日
+date_str = target_date.strftime('%y%m%d')
+
+# データ読み込み
+with open(f'/tmp/videos_{date_str}.json', 'r') as f:
+    videos = json.load(f)
+
+with open(f'/tmp/mv_scores_{date_str}.json', 'r') as f:
+    mv_scores = json.load(f)
+
+with open(f'/tmp/japan_scores_{date_str}.json', 'r') as f:
+    japan_scores = json.load(f)
+
+# スコア辞書化
+mv_dict = {item['id']: item for item in mv_scores}
+jp_dict = {item['id']: item for item in japan_scores}
+
+# マージ
+results = {
+    'high_quality': [],  # MV≥70 & JP=100
+    'japan_mv': [],      # MV≥50 & JP≥70
+    'candidates': [],    # MV≥30 & JP≥50
+    'excluded': []
+}
+
+for video in videos:
+    vid = video['id']
+    mv_data = mv_dict.get(vid, {})
+    jp_data = jp_dict.get(vid, {})
+
+    mv_score = mv_data.get('mv_score', 0)
+    jp_score = jp_data.get('japan_score', 0)
+
+    # Shorts除外
+    if mv_score < 0:  # Shortsは-100点
+        results['excluded'].append({
+            'id': vid,
+            'title': video['snippet']['title'],
+            'reason': 'Shorts'
+        })
+        continue
+
+    # マージデータ
+    item = {
+        'id': vid,
+        'title': video['snippet']['title'],
+        'channel': video['snippet']['channelTitle'],
+        'channel_country': jp_data.get('details', {}).get('channel_country', '不明'),
+        'published': video['snippet']['publishedAt'],
+        'duration_sec': mv_data.get('details', {}).get('duration_sec', 0),
+        'views': video['statistics'].get('viewCount', '0'),
+        'mv_score': mv_score,
+        'mv_reasons': mv_data.get('mv_reasons', ''),
+        'jp_score': jp_score,
+        'jp_reasons': jp_data.get('japan_reasons', '')
+    }
+
+    # 分類
+    if mv_score >= 70 and jp_score == 100:
+        results['high_quality'].append(item)
+    elif mv_score >= 50 and jp_score >= 70:
+        results['japan_mv'].append(item)
+    elif mv_score >= 30 and jp_score >= 50:
+        results['candidates'].append(item)
+    else:
+        results['excluded'].append({
+            'id': vid,
+            'title': video['snippet']['title'],
+            'reason': f'MV={mv_score}, JP={jp_score}'
+        })
+
+# ソート
+for category in ['high_quality', 'japan_mv', 'candidates']:
+    results[category].sort(key=lambda x: (x['mv_score'], x['jp_score']), reverse=True)
+
+# 保存
+with open(f'/tmp/merged_results_{date_str}.json', 'w') as f:
+    json.dump(results, f, ensure_ascii=False, indent=2)
+
+print(f"✅ スコアマージ完了")
+print(f"  - 確実な日本MV: {len(results['high_quality'])}件")
+print(f"  - 日本MV: {len(results['japan_mv'])}件")
+print(f"  - 要確認: {len(results['candidates'])}件")
+```
+
+#### 4.2 Markdownレポート生成
+
+```python
+# docs/{YYMMDD}/mv.md を生成
+#
+# 構成:
+# - サマリー（件数、APIコスト）
+# - 🌟 確実な日本MV (MV≥70 & JP=100)
+# - ✅ 日本MV (MV≥50 & JP≥70)
+# - 🔍 要確認 (MV≥30 & JP≥50)
+# - 2軸スコアリング説明
+```
+
+実装は `/tmp/generate_report_v3.py` を参考にしてください。
+
+## 採用基準（2軸スコアリング）
+
+```
+🌟 確実な日本MV: MVスコア≥70 AND 日本スコア=100
+  → チャンネル国が日本で、MV品質も高い
+
+✅ 日本MV: MVスコア≥50 AND 日本スコア≥70
+  → 日本の動画である可能性が高く、MV品質も十分
+
+🔍 要確認: MVスコア≥30 AND 日本スコア≥50
+  → MVまたは日本判定のスコアがやや低い
+
+❌ 除外: 上記以外
+```
+
+## 出力
+
+### JSONファイル（`/tmp`）
+
+```
+/tmp/videos_{YYMMDD}.json         # 動画詳細
+/tmp/channels_{YYMMDD}.json       # チャンネル情報
+/tmp/mv_scores_{YYMMDD}.json      # MVスコア
+/tmp/japan_scores_{YYMMDD}.json   # 日本スコア
+/tmp/merged_results_{YYMMDD}.json # マージ結果
+```
+
+### Markdownレポート
+
+```
+docs/{YYMMDD}/mv.md
+```
 
 ## 戦略（190件の日本MV分析に基づく）
+
+### 検索最適化
 - **高精度**: defaultLanguage="ja"が100%の信頼シグナル
 - **効率重視**: 3つの最適クエリで十分な拾得率
 - **ノイズ除去**: 制作クレジット（94%）と配信導線（76%）で品質判定
 
-## 分析結果の重要知見
-- 日本MVの72%がタイトルに"MV"/"Music Video"を含む
-- 94%が制作クレジット記載
-- 76%が配信導線リンク（Spotify等）を記載
-- 58%がタイトルに【】記号を使用
-- Shorts（60秒未満）は0%
-- 平均長さ3分52秒
+### スコアリング改善
+- **v3.1**: 制作クレジット判定を厳格化（正規表現で実名確認）
+- **v3.2**: AI生成コンテンツ検出（-20点）
+- **v3.3**: 2軸スコアリング導入（MV × 日本）
 
-## 手順
-
-### 1. 日付取得・ディレクトリ作成
-
-```bash
-TODAY=$(date +%Y-%m-%d)
-YYMMDD=$(date +%y%m%d)
-mkdir -p docs/${YYMMDD}
-```
-
-### 2. YouTube Data API検索（最適化された3クエリ）
-
-#### 2.1 search.list APIで候補を収集
-
-以下の**3つの最適クエリ**で検索を実行し、結果をマージする:
-
-**共通パラメータ**:
-- `key`: ${YOUTUBE_API_KEY}
-- `part`: snippet
-- `type`: video
-- `videoCategoryId`: 10（音楽カテゴリ）
-- `regionCode`: JP
-- **`relevanceLanguage`: ja** ← 必須！日本コンテンツに絞る
-- `publishedAfter`: 今日の00:00:00（UTC、ISO 8601形式、JST-9h）
-  - 例: 2026-01-08 00:00 JST → 2026-01-07T15:00:00Z
-- `publishedBefore`: 明日の00:00:00（UTC、ISO 8601形式、JST-9h）
-  - 例: 2026-01-09 00:00 JST → 2026-01-08T15:00:00Z
-- `maxResults`: 50
-- `order`: date
-
-**最適クエリセット（3個のみ）**:
-1. `q=MV` → 72%の日本MVがタイトルに含む
-2. `q=Music Video` → 日本MVでも英語表記が多い
-3. `q=Official Video` → 14%がタイトルに含む
-
-各クエリから取得した動画を全てマージし、**videoIdで重複排除**する。
-
-#### 2.2 videos.list APIで詳細情報を取得
-
-重複排除後のvideoIDリスト（約100-120件）を50件ずつ分割し、WebFetchで詳細情報を取得:
+## APIコスト
 
 ```
-https://www.googleapis.com/youtube/v3/videos
+検索: 300 units (3クエリ × 100 units)
+videos.list: 3 units
+channels.list: 3 units
+合計: 306 units / 10,000 (3.06%)
 ```
 
-**パラメータ**:
-- `key`: ${YOUTUBE_API_KEY}
-- `part`: snippet,contentDetails,statistics
-- `id`: video IDのカンマ区切りリスト（最大50件ずつ）
+## トラブルシューティング
 
-**取得する情報**:
-- `snippet.title`, `snippet.description`, `snippet.tags`
-- `snippet.channelTitle`, `snippet.publishedAt`
-- **`snippet.defaultLanguage`**, **`snippet.defaultAudioLanguage`** ← 最重要!
-- `contentDetails.duration`（ISO 8601形式 → 秒数に変換）
-- `statistics.viewCount`
+### Q. 公式MVが取得できない
 
-### 3. 事前フィルタ（日本判定）
+A. 検索の並び順が`relevance`だと、公開直後の動画が上位50件に入らない可能性があります。`order=date`に変更するか、ページ数を増やしてください。
 
-**Phase 1: 確実な日本MVシグナル（いずれか1つでOK）**
+### Q. 個人制作のAIコンテンツが高スコア
 
-最優先:
-1. **`defaultLanguage === "ja"`** → 100%の信頼度で日本（即採用）
-2. タイトルに **【】『』「」** + **日本語文字(ひらがな、カタカナ、漢字)** → 日本特有の記号（58%が使用）
-   - ⚠️ 記号だけでは不十分。日本語文字の存在も必須（非日本語コンテンツの誤検出防止）
-3. 説明文に **制作クレジット** + **日本語文字** → 94%の日本MVが記載
-   - "Director" "監督" "演出" "撮影" "編集" "制作" "Cast" "出演"
-4. 説明文に **配信導線** + **日本語文字** → 76%の日本MVが記載
-   - "Spotify" "Apple Music" "LINE MUSIC" "linkco.re" "lnk.to"
+A. `/youtube-mv-score-mv`のv3.2でAI生成検出を追加しました。説明文に"AI Generation"等があれば-20点されます。
 
-**判定**: 上記のいずれも該当しない → 除外
+### Q. 制作クレジットの誤検出
 
-**Phase 2: Shorts除外**
-- duration < 60秒 → 除外（日本MVは全て長尺）
-- タイトル/説明文に"#shorts" → 除外
-
-**Phase 3: 露骨な非MV除外**
-- "cover" "カバー" "歌ってみた" "踊ってみた" "弾いてみた"
-- "reaction" "リアクション" "react to"
-- "teaser" "ティザー" "trailer" "予告"
-
-### 4. MVスコアリング（0-100点）
-
-日本と判定された動画に対してスコアリング:
-
-#### A. MV形式の確度（最大50点）
-
-**タイトルのキーワード（最大30点）**
-- "MV" "Music Video" "ミュージックビデオ" → **+20点**
-- "Official Video" / "Official MV" → **+10点**
-
-**説明文の充実度（最大20点）**
-- 制作クレジット記載（Director, 監督等） → **+15点**
-- 配信導線リンク（Spotify, Apple Music等） → **+5点**
-
-#### B. 公式性（最大20点）
-
-- タイトルに "Official" → **+10点**
-- チャンネル名に "Official" "公式" "VEVO" → **+10点**
-
-#### C. 長さの妥当性（最大15点）
-
-```
-duration（秒数）:
-- 180-300秒 (3-5分: 標準) → +15点
-- 120-180秒 or 300-360秒 → +10点
-- 60-120秒 or 360-480秒 → +5点
-- < 60秒 → -100点（Shorts除外）
-```
-
-#### D. 日本MV特有要素（最大15点）
-
-- タイトルに **【】『』「」** + **日本語文字** → **+10点**（58%が使用）
-  - ⚠️ 記号と日本語文字の両方が必須（非日本語コンテンツの誤検出防止）
-- 説明文が500字以上 → **+5点**（平均1,200字）
-
-#### E. 減点項目
-
-```
-【非MV: -40点】
-- "cover" "カバー" "歌ってみた" "踊ってみた"
-- "reaction" "リアクション"
-
-【ライブ: -15点】
-- "Live" "ライブ" "LIVE"
-  ※"Official Live Video"なら-5点に軽減
-
-【Lyric Video: -10点】
-- "Lyric Video" "リリックビデオ" "歌詞付き"
-```
-
-#### 採用基準（ブラッシュアップ版）
-- **score ≥ 70**: 確実な日本公式MV（最優先）
-- **50-69**: 日本MVの可能性高（採用）
-- **30-49**: 要確認（Lyric Video等）
-- **< 30**: 除外
-
-### 5. レポート出力
-
-`docs/{YYMMDD}/mv.md` に以下の形式で出力:
-
-```markdown
-# 音楽MV新着レポート
-
-**取得日時**: YYYY-MM-DD HH:MM
-**対象日**: YYYY-MM-DD
-
----
-
-## 📊 サマリー
-
-- **合計候補数**: XX件（重複排除後）
-- **日本MV（defaultLanguage=ja）**: XX件
-- **MV確度高（≥70点）**: XX件
-- **MV採用（50-69点）**: XX件
-- **要確認（30-49点）**: XX件
-- **除外（<30点）**: XX件
-- **検索クエリ数**: 3個（最適化）
-- **API使用クォータ**: 約303ユニット
-
-**除外理由の内訳**:
-- 非日本（defaultLanguage≠ja）: XX件
-- Shorts（<60秒）: XX件
-- カバー/踊ってみた: XX件
-- ライブ: XX件
-- リアクション: XX件
-- その他: XX件
-
----
-
-## 🎬 新着MV一覧（スコア順）
-
-### ⭐ 確実な日本公式MV（≥70点）
-
-| # | スコア | サムネイル | タイトル | チャンネル名 | 公開日時 | 長さ | 再生回数 | リンク | 判定理由 |
-|---|-------|-----------|---------|------------|---------|------|---------|-------|---------|
-| 1 | 85 | ![](https://i.ytimg.com/vi/VIDEO_ID/default.jpg) | タイトル | チャンネル名 | 14:30 | 3:45 | 1,234 | [YouTube](https://www.youtube.com/watch?v=VIDEO_ID) | +20(MV), +15(制作), +5(配信), +10(Official), +10(【】), +15(長さ), +10(公式ch) |
-
-### ✅ 日本MV（50-69点）
-
-| # | スコア | サムネイル | タイトル | チャンネル名 | 公開日時 | 長さ | 再生回数 | リンク | 判定理由 |
-|---|-------|-----------|---------|------------|---------|------|---------|-------|---------|
-| X | 65 | ![](URL) | タイトル | チャンネル | 12:30 | 4:20 | 567 | [YouTube](URL) | +20(MV), +15(長さ), +10(Official), +10(【】), +5(配信), +5(説明文充実) |
-
----
-
-## 🔍 要確認（30-49点）
-
-| # | スコア | タイトル | チャンネル名 | リンク | 判定理由 |
-|---|-------|---------|------------|-------|---------|
-| X | 45 | タイトル | チャンネル | [YouTube](URL) | +20(MV), +15(長さ), +10(【】), -10(Lyric Video) |
-
----
-
-### 検索条件（最適化版）
-- **カテゴリ**: 音楽（videoCategoryId=10）
-- **地域**: 日本（regionCode=JP）
-- **言語優先**: 日本語（relevanceLanguage=ja）← 必須
-- **クエリ**: "MV", "Music Video", "Official Video"（3個のみ）
-- **期間**: 本日00:00〜23:59（日本時間）
-- **日本判定**: defaultLanguage="ja"が最優先（100%信頼度）
-- **スコアリング**: 190件の日本MV分析に基づく最適化
-
-### 分析基準
-- 制作クレジット記載: 94%の日本MVが持つ
-- 配信導線リンク: 76%の日本MVが持つ
-- 【】記号使用: 58%の日本MVが使用
-- 平均長さ: 3分52秒
-- Shorts（<60秒）: 0%
-```
-
-### 6. 完了報告
-
-出力したファイルパスと、採用したMV数（≥50点）を表示してください。
-
-## 重要な注意事項
-
-- **高精度**: defaultLanguage="ja"で日本を100%判定
-- **効率重視**: 3クエリ（300ユニット）+ 詳細取得（3ユニット）= 303ユニット
-- **ノイズ除去**: 制作クレジット・配信導線・【】記号で品質判定
-- API キーは環境変数`YOUTUBE_API_KEY`から取得
-- 日本時間（JST = UTC+9）とUTCの変換に注意
-- durationはISO 8601形式（PT3M45S → 225秒）から秒数に変換
-- スコアの判定理由は簡潔に（主要な加減点のみ）
+A. v3.1で正規表現による厳格化を実施。「制作によせて」等の文章では加点されません。
 
 ## 改善履歴
 
+### v3 (2026-01-08)
+- 2軸スコアリング導入（MV × 日本）
+- チャンネル国情報を追加（channels.list API）
+- スキル分割（fetch, score-mv, score-japan）
+
 ### v2 (2026-01-08)
-**問題**: ネパールのアーティスト(Chhewang Lama)が高スコア(75点)で誤検出された
+- 日本判定を厳格化（記号 + 日本語文字必須）
+- ネパール等の誤検出を防止
 
-**原因分析**:
-- タイトルに「」記号があるだけで日本と判定されていた
-- タイトル: `Chhewang Lama - Mann Ma Basna Deu「Official MV」`
-- 日本語文字(ひらがな、カタカナ、漢字)が一切含まれていないのに判定を通過
-
-**改善内容**:
-1. **日本判定の厳格化**:
-   - 【】『』「」記号があっても、日本語文字が含まれていない場合は除外
-   - 制作クレジット・配信導線も日本語文字の存在を確認
-
-2. **スコアリングの厳格化**:
-   - 【】記号による+10点も、日本語文字が含まれている場合のみ加点
-
-**効果**:
-- ネパール等の非日本語コンテンツの誤検出を防止
-- 日本MV検出精度が向上
+### v1 (2026-01-07)
+- 初版リリース
+- 190件の日本MV分析に基づく最適化
