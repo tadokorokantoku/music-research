@@ -18,9 +18,9 @@ YouTube Data APIを使って音楽MV候補を取得し、JSONファイルとし�
 ## 出力
 
 以下のJSONファイルを`/tmp`に出力:
-- `videos_{YYMMDD}.json`: 動画詳細情報
-- `channels_{YYMMDD}.json`: チャンネル情報
-- `metadata_{YYMMDD}.json`: メタデータ（検索条件、実行日時など）
+- `videos_{YYMMDD}_{HH}.json`: 動画詳細情報
+- `channels_{YYMMDD}_{HH}.json`: チャンネル情報
+- `metadata_{YYMMDD}_{HH}.json`: メタデータ（検索条件、実行日時など）
 
 ## 検索条件（デフォルト）
 
@@ -76,10 +76,10 @@ start_utc = now_utc - timedelta(hours=hours)
 published_after = start_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
 published_before = now_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
 
-# ファイル名用の日付（JST）
+# ファイル名用の日付+時刻（JST）
 jst = timezone(timedelta(hours=9))
 now_jst = now_utc.astimezone(jst)
-date_str = now_jst.strftime('%y%m%d')
+date_str = now_jst.strftime('%y%m%d_%H')  # 例: 260108_14
 ```
 
 ### 3. 検索実行
@@ -106,14 +106,14 @@ for batch in ...; do
 done
 
 # マージ
-cat /tmp/videos_batch*.json | jq -s 'map(.items) | flatten' > /tmp/videos_{YYMMDD}.json
+cat /tmp/videos_batch*.json | jq -s 'map(.items) | flatten' > /tmp/videos_{YYMMDD}_{HH}.json
 ```
 
 ### 5. チャンネル情報取得
 
 ```bash
 # チャンネルID抽出
-cat /tmp/videos_{YYMMDD}.json | jq -r '.[].snippet.channelId' | sort | uniq > /tmp/channel_ids.txt
+cat /tmp/videos_{YYMMDD}_{HH}.json | jq -r '.[].snippet.channelId' | sort | uniq > /tmp/channel_ids.txt
 
 # 50件ずつバッチ処理
 for batch in ...; do
@@ -122,7 +122,7 @@ for batch in ...; do
 done
 
 # マージ
-cat /tmp/channels_batch*.json | jq -s 'map(.items) | flatten' > /tmp/channels_{YYMMDD}.json
+cat /tmp/channels_batch*.json | jq -s 'map(.items) | flatten' > /tmp/channels_{YYMMDD}_{HH}.json
 ```
 
 ### 6. メタデータ保存
@@ -144,7 +144,7 @@ cat /tmp/channels_batch*.json | jq -s 'map(.items) | flatten' > /tmp/channels_{Y
 ## 出力例
 
 ```bash
-/tmp/videos_260107.json:
+/tmp/videos_260108_14.json:
 [
   {
     "id": "lBZCZ3m5hCI",
@@ -165,7 +165,7 @@ cat /tmp/channels_batch*.json | jq -s 'map(.items) | flatten' > /tmp/channels_{Y
   ...
 ]
 
-/tmp/channels_260107.json:
+/tmp/channels_260108_14.json:
 [
   {
     "id": "UC...",
@@ -195,7 +195,7 @@ cat /tmp/channels_batch*.json | jq -s 'map(.items) | flatten' > /tmp/channels_{Y
 APIコスト: 306 units
 
 出力ファイル:
-- /tmp/videos_{YYMMDD}.json
-- /tmp/channels_{YYMMDD}.json
-- /tmp/metadata_{YYMMDD}.json
+- /tmp/videos_{YYMMDD}_{HH}.json
+- /tmp/channels_{YYMMDD}_{HH}.json
+- /tmp/metadata_{YYMMDD}_{HH}.json
 ```

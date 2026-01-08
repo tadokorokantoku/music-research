@@ -9,11 +9,11 @@ JSONファイルから動画データを読み込み、MVスコアを計算し�
 
 ## 入力
 
-- `/tmp/videos_{YYMMDD}.json`: 動画詳細情報
+- `/tmp/videos_{YYMMDD}_{HH}.json`: 動画詳細情報
 
 ## 出力
 
-- `/tmp/mv_scores_{YYMMDD}.json`: MVスコア結果
+- `/tmp/mv_scores_{YYMMDD}_{HH}.json`: MVスコア結果
 
 ```json
 [
@@ -274,10 +274,11 @@ def calc_mv_score(video):
     }
 
 # メイン処理
-def main(target_date):
-    date_str = target_date.replace('-', '')[2:]  # YYMMDD
-
-    with open(f'/tmp/videos_{date_str}.json', 'r') as f:
+def main(date_hour_str):
+    """
+    date_hour_str: YYMMDD_HH 形式 (例: "260108_14")
+    """
+    with open(f'/tmp/videos_{date_hour_str}.json', 'r') as f:
         videos = json.load(f)
 
     results = []
@@ -285,7 +286,7 @@ def main(target_date):
         result = calc_mv_score(video)
         results.append(result)
 
-    with open(f'/tmp/mv_scores_{date_str}.json', 'w') as f:
+    with open(f'/tmp/mv_scores_{date_hour_str}.json', 'w') as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
 
     print(f"✅ MVスコア計算完了: {len(results)}件")
@@ -301,7 +302,17 @@ def main(target_date):
 
 if __name__ == '__main__':
     import sys
-    main(sys.argv[1] if len(sys.argv) > 1 else '2026-01-07')
+    from datetime import datetime, timezone, timedelta
+
+    if len(sys.argv) > 1:
+        date_hour_str = sys.argv[1]
+    else:
+        # デフォルト: 現在のJST時刻
+        jst = timezone(timedelta(hours=9))
+        now_jst = datetime.now(jst)
+        date_hour_str = now_jst.strftime('%y%m%d_%H')
+
+    main(date_hour_str)
 ```
 
 ## 改善履歴

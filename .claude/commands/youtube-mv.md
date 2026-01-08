@@ -89,19 +89,19 @@ YouTube Data APIを使って、過去N時間に投稿された日本の音楽MV�
 import json
 from datetime import datetime, timezone, timedelta
 
-# 日付（現在のJST日付でファイル名を特定）
+# 日付+時刻（現在のJST日時でファイル名を特定）
 jst = timezone(timedelta(hours=9))
 now_jst = datetime.now(jst)
-date_str = now_jst.strftime('%y%m%d')
+date_hour_str = now_jst.strftime('%y%m%d_%H')  # 例: 260108_14
 
 # データ読み込み
-with open(f'/tmp/videos_{date_str}.json', 'r') as f:
+with open(f'/tmp/videos_{date_hour_str}.json', 'r') as f:
     videos = json.load(f)
 
-with open(f'/tmp/mv_scores_{date_str}.json', 'r') as f:
+with open(f'/tmp/mv_scores_{date_hour_str}.json', 'r') as f:
     mv_scores = json.load(f)
 
-with open(f'/tmp/japan_scores_{date_str}.json', 'r') as f:
+with open(f'/tmp/japan_scores_{date_hour_str}.json', 'r') as f:
     japan_scores = json.load(f)
 
 # スコア辞書化
@@ -167,7 +167,7 @@ for category in ['high_quality', 'japan_mv', 'candidates']:
     results[category].sort(key=lambda x: (x['mv_score'], x['jp_score']), reverse=True)
 
 # 保存
-with open(f'/tmp/merged_results_{date_str}.json', 'w') as f:
+with open(f'/tmp/merged_results_{date_hour_str}.json', 'w') as f:
     json.dump(results, f, ensure_ascii=False, indent=2)
 
 print(f"✅ スコアマージ完了")
@@ -179,14 +179,16 @@ print(f"  - 要確認: {len(results['candidates'])}件")
 #### 4.2 Markdownレポート生成
 
 ```python
-# docs/{YYMMDD}/mv.md を生成
+# docs/{YYMMDD}/mv_{HH}.md を生成
 #
 # 構成:
-# - サマリー（件数、APIコスト）
+# - サマリー（件数、APIコスト、対象期間）
 # - 🌟 確実な日本MV (MV≥70 & JP=100)
 # - ✅ 日本MV (MV≥50 & JP≥70)
 # - 🔍 要確認 (MV≥30 & JP≥50)
 # - 2軸スコアリング説明
+#
+# 例: docs/260108/mv_14.md (2026年1月8日14時実行分)
 ```
 
 実装は `/tmp/generate_report_v3.py` を参考にしてください。
@@ -211,17 +213,17 @@ print(f"  - 要確認: {len(results['candidates'])}件")
 ### JSONファイル（`/tmp`）
 
 ```
-/tmp/videos_{YYMMDD}.json         # 動画詳細
-/tmp/channels_{YYMMDD}.json       # チャンネル情報
-/tmp/mv_scores_{YYMMDD}.json      # MVスコア
-/tmp/japan_scores_{YYMMDD}.json   # 日本スコア
-/tmp/merged_results_{YYMMDD}.json # マージ結果
+/tmp/videos_{YYMMDD}_{HH}.json         # 動画詳細
+/tmp/channels_{YYMMDD}_{HH}.json       # チャンネル情報
+/tmp/mv_scores_{YYMMDD}_{HH}.json      # MVスコア
+/tmp/japan_scores_{YYMMDD}_{HH}.json   # 日本スコア
+/tmp/merged_results_{YYMMDD}_{HH}.json # マージ結果
 ```
 
 ### Markdownレポート
 
 ```
-docs/{YYMMDD}/mv.md
+docs/{YYMMDD}/mv_{HH}.md
 ```
 
 ## 戦略（190件の日本MV分析に基づく）
@@ -260,6 +262,12 @@ A. `/youtube-mv-score-mv`のv3.2でAI生成検出を追加しました。説明�
 A. v3.1で正規表現による厳格化を実施。「制作によせて」等の文章では加点されません。
 
 ## 改善履歴
+
+### v3.5 (2026-01-08)
+- ファイル名に実行時刻（時）を追加
+- `/tmp/videos_{YYMMDD}_{HH}.json` 形式に変更
+- `docs/{YYMMDD}/mv_{HH}.md` でレポート保存
+- 同日に複数回実行しても上書きされない
 
 ### v3.4 (2026-01-08)
 - hours引数を追加（過去N時間分のデータを取得）
