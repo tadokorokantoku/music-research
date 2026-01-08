@@ -11,7 +11,7 @@ YouTube Data APIを使って音楽MV候補を取得し、JSONファイルとし�
 
 ## 入力パラメータ
 
-- **target_date**: 対象日（YYYY-MM-DD形式、省略時は前日）
+- **hours**: 過去何時間分のデータを取得するか（デフォルト: 24）
 - **queries**: 検索クエリ（省略時はデフォルト3クエリ）
 - **pages_per_query**: クエリごとのページ数（デフォルト: 1）
 
@@ -31,7 +31,8 @@ YouTube Data APIを使って音楽MV候補を取得し、JSONファイルとし�
   - videoCategoryId: 10 (音楽)
   - regionCode: JP
   - relevanceLanguage: ja
-  - publishedAfter/Before: 対象日の00:00〜23:59 (JST)
+  - publishedAfter: 現在時刻から hours 時間前 (UTC)
+  - publishedBefore: 現在時刻 (UTC)
 ```
 
 ## APIコスト
@@ -62,22 +63,23 @@ APIKEY=$(grep YOUTUBE_API_KEY .env.local | cut -d'=' -f2)
 ```python
 from datetime import datetime, timedelta, timezone
 
-# 対象日（指定なければ前日）
-if target_date:
-    target = datetime.strptime(target_date, '%Y-%m-%d')
-else:
-    target = datetime.now() - timedelta(days=1)
+# hours パラメータ（デフォルト: 24）
+hours = int(args) if args else 24
 
-# JST → UTC変換
-jst = timezone(timedelta(hours=9))
-target_jst = target.replace(tzinfo=jst)
+# 現在時刻（UTC）
+now_utc = datetime.now(timezone.utc)
 
-# API用のUTC時刻
-start_utc = target_jst.replace(hour=0, minute=0, second=0).astimezone(timezone.utc)
-end_utc = target_jst.replace(hour=23, minute=59, second=59).astimezone(timezone.utc)
+# hours 時間前
+start_utc = now_utc - timedelta(hours=hours)
 
+# API用のISO 8601形式
 published_after = start_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
-published_before = end_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
+published_before = now_utc.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+# ファイル名用の日付（JST）
+jst = timezone(timedelta(hours=9))
+now_jst = now_utc.astimezone(jst)
+date_str = now_jst.strftime('%y%m%d')
 ```
 
 ### 3. 検索実行
@@ -127,7 +129,9 @@ cat /tmp/channels_batch*.json | jq -s 'map(.items) | flatten' > /tmp/channels_{Y
 
 ```json
 {
-  "target_date": "2026-01-07",
+  "hours": 24,
+  "published_after": "2026-01-07T15:00:00Z",
+  "published_before": "2026-01-08T15:00:00Z",
   "executed_at": "2026-01-08T18:30:00+09:00",
   "queries": ["MV", "Music Video", "Official Video"],
   "pages_per_query": 1,
@@ -185,13 +189,13 @@ cat /tmp/channels_batch*.json | jq -s 'map(.items) | flatten' > /tmp/channels_{Y
 ```
 ✅ データ取得完了
 
-対象日: 2026-01-07
+対象期間: 過去 {hours} 時間
 取得動画数: 149件
 チャンネル数: 142件
 APIコスト: 306 units
 
 出力ファイル:
-- /tmp/videos_260107.json
-- /tmp/channels_260107.json
-- /tmp/metadata_260107.json
+- /tmp/videos_{YYMMDD}.json
+- /tmp/channels_{YYMMDD}.json
+- /tmp/metadata_{YYMMDD}.json
 ```

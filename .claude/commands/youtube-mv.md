@@ -1,16 +1,27 @@
 ---
-description: YouTube Data APIを使って今日投稿された日本の音楽MV動画を効率的に収集し、2軸スコアリングしてレポートを作成する
+description: YouTube Data APIを使って過去N時間の日本の音楽MV動画を効率的に収集し、2軸スコアリングしてレポートを作成する
 ---
 
 # youtube-mv
 
-YouTube Data APIを使って、今日投稿された日本の音楽MV動画を検索し、2軸スコアリング（MVスコア × 日本スコア）でノイズを除去してレポートを作成します。
+YouTube Data APIを使って、過去N時間に投稿された日本の音楽MV動画を検索し、2軸スコアリング（MVスコア × 日本スコア）でノイズを除去してレポートを作成します。
+
+## 使い方
+
+```bash
+/youtube-mv [hours]
+```
+
+- **hours**: 過去何時間分のデータを取得するか（デフォルト: 24）
+  - 例: `/youtube-mv 1` → 過去1時間分
+  - 例: `/youtube-mv 24` → 過去24時間分（1日分）
+  - 例: `/youtube-mv` → 過去24時間分（デフォルト）
 
 ## 概要
 
 このコマンドは3つのサブコマンドを順番に実行します:
 
-1. **`/youtube-mv-fetch`**: データ取得
+1. **`/youtube-mv-fetch {hours}`**: データ取得
 2. **`/youtube-mv-score-mv`**: MVスコアリング（0-100点）
 3. **`/youtube-mv-score-japan`**: 日本スコアリング（0-100点）
 4. **レポート生成**: 2軸スコアでフィルタリング・分類
@@ -20,7 +31,7 @@ YouTube Data APIを使って、今日投稿された日本の音楽MV動画を�
 ### Step 1: データ取得
 
 ```
-/youtube-mv-fetch
+/youtube-mv-fetch {hours}
 ```
 
 **実行内容**:
@@ -78,10 +89,10 @@ YouTube Data APIを使って、今日投稿された日本の音楽MV動画を�
 import json
 from datetime import datetime, timezone, timedelta
 
-# 日付
+# 日付（現在のJST日付でファイル名を特定）
 jst = timezone(timedelta(hours=9))
-target_date = datetime.now(jst) - timedelta(days=1)  # 前日
-date_str = target_date.strftime('%y%m%d')
+now_jst = datetime.now(jst)
+date_str = now_jst.strftime('%y%m%d')
 
 # データ読み込み
 with open(f'/tmp/videos_{date_str}.json', 'r') as f:
@@ -249,6 +260,11 @@ A. `/youtube-mv-score-mv`のv3.2でAI生成検出を追加しました。説明�
 A. v3.1で正規表現による厳格化を実施。「制作によせて」等の文章では加点されません。
 
 ## 改善履歴
+
+### v3.4 (2026-01-08)
+- hours引数を追加（過去N時間分のデータを取得）
+- デフォルト24時間
+- `/youtube-mv 1` で過去1時間、`/youtube-mv 24` で過去24時間
 
 ### v3 (2026-01-08)
 - 2軸スコアリング導入（MV × 日本）
