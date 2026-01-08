@@ -2,8 +2,8 @@ name: Daily Music Search
 
 on:
   schedule:
-    # 毎日22時（日本時間）= UTC 13時
-    - cron: "0 13 * * *"
+    # 毎日10時（日本時間）= UTC 1時
+    - cron: "0 1 * * *"
   workflow_dispatch: # 手動実行も可能
 
 jobs:
