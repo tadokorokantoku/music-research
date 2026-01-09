@@ -22,7 +22,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: "/youtube-mv 1"
-          claude_args: "--max-turns 20 --allowedTools Bash,Read,Write,Edit,WebFetch,Glob,Grep,Skill"
+          claude_args: "--max-turns 50 --allowedTools Bash,Read,Write,Edit,WebFetch,Glob,Grep,Skill"
           show_full_output: true
         env:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
