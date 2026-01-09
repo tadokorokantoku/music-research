@@ -16,8 +16,10 @@ def parse_issue_body(body: str):
     lines = body.split('\n')
 
     for line in lines:
-        # Check for checked checkbox in table row
-        if line.startswith('| [x]') or line.startswith('| [X]'):
+        # Check for checked checkbox in table row (support both [x] and emoji ✅)
+        line_lower = line.lower()
+        if (line.startswith('| [x]') or line.startswith('| [X]') or
+            '| [✅' in line or '| [☑' in line or '| [✓' in line):
             parts = [p.strip() for p in line.split('|')]
             if len(parts) >= 7:
                 # Extract video info

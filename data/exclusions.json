@@ -1,8 +1,64 @@
 {
   "version": "1.0",
-  "last_updated": null,
-  "videos": [],
-  "patterns": [],
+  "last_updated": "2026-01-09T21:23:28.432745",
+  "videos": [
+    {
+      "video_id": "qZIRwoBXTfs",
+      "title": "鄧麗君 Teresa Teng テレサ・テン - 南海姑娘 (Official Music Vide...",
+      "channel": "TeresaTengVEVO",
+      "reason": "多分公式だけど、テレサテンはかなり昔の人で、昔の映像を上げているだけ",
+      "date_added": "2026-01-09",
+      "issue_number": "1"
+    },
+    {
+      "video_id": "K9KN-ui9yQo",
+      "title": "周傳雄 Steve Chou《黃昏》Official Video(4K UPGRADE)",
+      "channel": "金曲年代GOLDEN ERA",
+      "reason": "中国のMV",
+      "date_added": "2026-01-09",
+      "issue_number": "1"
+    },
+    {
+      "video_id": "PLTFvlVu_8w",
+      "title": "とんでもない美声の人がいますっ！！DXTEEN｜'両片想い' Official MV【初見でプロが驚いた他のグループにはない要素とは？！】",
+      "channel": "才雅(さいが)【ボイストレーナー】",
+      "reason": "ボイトレ動画  MVではない",
+      "date_added": "2026-01-09",
+      "issue_number": "1"
+    },
+    {
+      "video_id": "aoobKRjo86Y",
+      "title": "FLOWER《Echoes of Life 生命迴響》Official MV",
+      "channel": "Flower",
+      "reason": "中国のMV",
+      "date_added": "2026-01-09",
+      "issue_number": "1"
+    },
+    {
+      "video_id": "AXQt8eREkIw",
+      "title": "【MV】誓いと誇り / MARIGATO",
+      "channel": "MARIGATO🐭ちゃんねる",
+      "reason": "概要欄にクレジットがほぼない",
+      "date_added": "2026-01-09",
+      "issue_number": "1"
+    },
+    {
+      "video_id": "SHWnOG7a3yY",
+      "title": "ふれふれフレーバー/教えてショートケーキ　LIVE MV ver.　【非公式】",
+      "channel": "めばちまりんは偽久保先輩の夢を見ない",
+      "reason": "タイトルに非公式とある",
+      "date_added": "2026-01-09",
+      "issue_number": "1"
+    }
+  ],
+  "patterns": [
+    {
+      "pattern_type": "title_keyword",
+      "pattern": ".*非公式.*",
+      "score_penalty": -40,
+      "reason": "非公式ファン動画"
+    }
+  ],
   "scoring_rules": {
     "description": "動的に学習したスコアリング調整ルール",
     "rules": []
