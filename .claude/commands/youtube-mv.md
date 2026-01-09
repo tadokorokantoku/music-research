@@ -169,10 +169,29 @@ for video in videos:
             mv_score += penalty
             print(f"  🔧 {title}: MVスコア {penalty:+d}点調整")
 
-    # スコアリングルール適用
+    # スコアリングルール適用（汎用的なルールベース調整）
     for rule in exclusions.get('scoring_rules', {}).get('rules', []):
-        # TODO: ルール適用ロジックを実装
-        pass
+        rule_type = rule.get('rule_type')
+        pattern = rule.get('pattern')
+        adjustments = rule.get('score_adjustment', {})
+        mv_adj = adjustments.get('mv_score', 0)
+        jp_adj = adjustments.get('japan_score', 0)
+
+        matched = False
+        if rule_type == 'title_pattern' and re.search(pattern, title, re.IGNORECASE):
+            matched = True
+            target = 'タイトル'
+        elif rule_type == 'channel_pattern' and re.search(pattern, channel, re.IGNORECASE):
+            matched = True
+            target = 'チャンネル'
+
+        if matched:
+            if mv_adj != 0:
+                mv_score += mv_adj
+                print(f"  🔧 {target}: MVスコア {mv_adj:+d}点調整 ({rule.get('reason', '')})")
+            if jp_adj != 0:
+                jp_score += jp_adj
+                print(f"  🔧 {target}: 日本スコア {jp_adj:+d}点調整 ({rule.get('reason', '')})")
 
     # Shorts除外
     if mv_score < 0:  # Shortsは-100点

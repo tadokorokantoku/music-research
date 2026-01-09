@@ -51,14 +51,19 @@ def parse_issue_body(body: str):
     return checked_videos
 
 def extract_patterns(videos: list) -> dict:
-    """Extract common patterns from exclusion reasons"""
+    """Extract common patterns from exclusion reasons
+
+    NOTE: This is a simple pattern extraction. For more sophisticated analysis,
+    run: python3 scripts/analyze_annotations.py data/exclusions.json
+    This will generate a prompt for LLM to create generalized scoring rules.
+    """
     patterns = {
         'channel_patterns': [],
         'title_keywords': [],
         'scoring_adjustments': []
     }
 
-    # Simple pattern extraction (can be enhanced with LLM later)
+    # Simple pattern extraction for backward compatibility
     reasons_text = '\n'.join([v['reason'] for v in videos])
 
     # Detect common channel patterns
@@ -94,6 +99,10 @@ def extract_patterns(videos: list) -> dict:
             'score_penalty': -25,
             'reason': 'AI生成コンテンツ'
         })
+
+    print()
+    print("💡 For more sophisticated pattern analysis, run:")
+    print("   python3 scripts/analyze_annotations.py data/exclusions.json")
 
     return patterns
 

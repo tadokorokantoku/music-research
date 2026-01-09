@@ -61,6 +61,83 @@
   ],
   "scoring_rules": {
     "description": "動的に学習したスコアリング調整ルール",
-    "rules": []
+    "rules": [
+      {
+        "rule_type": "title_pattern",
+        "pattern": "《.*》|【.*】.*Official.*Video.*(4K|HD|Remaster|UPGRADE)",
+        "score_adjustment": {
+          "mv_score": 0,
+          "japan_score": -30
+        },
+        "reason": "中国語特有の括弧《》を使用し、リマスター表記がある動画は中国語圏のアーカイブMVの可能性が高い",
+        "example_matches": [
+          "周傳雄 Steve Chou《黃昏》Official Video(4K UPGRADE)",
+          "鄧麗君《甜蜜蜜》Official MV Remaster"
+        ],
+        "false_positive_check": "日本のMVは通常《》を使用せず【】を使う。《》がある時点で中国語圏の動画と判断して問題ない",
+        "confidence": "high"
+      },
+      {
+        "rule_type": "channel_pattern",
+        "pattern": ".*(ボイストレーナー|ボイトレ|リアクション|解説|考察|レビュー).*",
+        "score_adjustment": {
+          "mv_score": -40,
+          "japan_score": 0
+        },
+        "reason": "解説・リアクション系チャンネルはMV自体ではなく、MVを題材にした二次コンテンツ",
+        "example_matches": [
+          "才雅(さいが)【ボイストレーナー】",
+          "音楽解説チャンネル",
+          "〇〇のリアクション動画"
+        ],
+        "false_positive_check": "公式チャンネルやアーティスト本人のチャンネルにこれらの文字列が含まれることはまずない",
+        "confidence": "high"
+      },
+      {
+        "rule_type": "title_pattern",
+        "pattern": ".*(驚いた|すごい|ヤバい|初見|見てみた|聴いてみた|反応).*Official MV.*",
+        "score_adjustment": {
+          "mv_score": -35,
+          "japan_score": 0
+        },
+        "reason": "リアクション・感想を示す言葉がタイトルにある場合、MV自体ではなく解説動画の可能性が高い",
+        "example_matches": [
+          "とんでもない美声の人がいますっ！！DXTEEN｜'両片想い' Official MV【初見でプロが驚いた】",
+          "すごすぎる！〇〇のMVを見てみた"
+        ],
+        "false_positive_check": "公式MVのタイトルにリアクション系の言葉が入ることはまずない",
+        "confidence": "high"
+      },
+      {
+        "rule_type": "channel_pattern",
+        "pattern": ".*ちゃんねる$",
+        "score_adjustment": {
+          "mv_score": -15,
+          "japan_score": 0
+        },
+        "reason": "「〜ちゃんねる」で終わるチャンネル名は個人配信者の可能性が高く、小規模制作の傾向",
+        "example_matches": [
+          "MARIGATO🐭ちゃんねる",
+          "〇〇の音楽ちゃんねる"
+        ],
+        "false_positive_check": "大手事務所や公式チャンネルは「〜ちゃんねる」という命名をあまり使わない。ただし例外もあるため減点は控えめ（-15点）",
+        "confidence": "medium"
+      },
+      {
+        "rule_type": "title_pattern",
+        "pattern": ".*【非公式】.*|.*\\(非公式\\).*|.*unofficial.*",
+        "score_adjustment": {
+          "mv_score": -50,
+          "japan_score": 0
+        },
+        "reason": "明示的に非公式と表記されている動画はファン制作の二次創作",
+        "example_matches": [
+          "ふれふれフレーバー/教えてショートケーキ　LIVE MV ver.　【非公式】",
+          "〇〇 MV (非公式)"
+        ],
+        "false_positive_check": "公式MVが「非公式」と表記することはありえない。誤検出リスクは極めて低い",
+        "confidence": "very_high"
+      }
+    ]
   }
 }
