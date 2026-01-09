@@ -165,7 +165,13 @@ def calc_mv_score(video):
     title = snippet.get('title', '')
     description = snippet.get('description', '')
     channel_title = snippet.get('channelTitle', '')
-    duration_sec = parse_duration(video['contentDetails']['duration'])
+
+    # durationが存在しない場合（ライブ配信等）はスキップ
+    duration = video.get('contentDetails', {}).get('duration')
+    if not duration:
+        return None
+
+    duration_sec = parse_duration(duration)
 
     score = 0
     reasons = []
@@ -284,7 +290,8 @@ def main(date_hour_str):
     results = []
     for video in videos:
         result = calc_mv_score(video)
-        results.append(result)
+        if result is not None:  # durationがない動画はスキップ
+            results.append(result)
 
     with open(f'/tmp/mv_scores_{date_hour_str}.json', 'w') as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
