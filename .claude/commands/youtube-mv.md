@@ -28,6 +28,13 @@ YouTube Data APIを使って、過去N時間に投稿された日本の音楽MV�
 
 ## 実行手順
 
+### Step 0: 除外リスト読み込み（スキップ可能）
+
+`data/exclusions.json` が存在する場合、除外ルールを読み込みます。このファイルには以下が含まれます：
+- 除外する動画ID
+- チャンネル名/タイトルのパターン
+- スコアリング調整ルール
+
 ### Step 1: データ取得
 
 ```
@@ -87,7 +94,9 @@ YouTube Data APIを使って、過去N時間に投稿された日本の音楽MV�
 ```python
 #!/usr/bin/env python3
 import json
+import re
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 
 # 日付+時刻（現在のJST日時でファイル名を特定）
 jst = timezone(timedelta(hours=9))
@@ -104,9 +113,20 @@ with open(f'/tmp/mv_scores_{date_hour_str}.json', 'r') as f:
 with open(f'/tmp/japan_scores_{date_hour_str}.json', 'r') as f:
     japan_scores = json.load(f)
 
+# 除外リスト読み込み
+exclusions = {'videos': [], 'patterns': [], 'scoring_rules': {'rules': []}}
+exclusions_file = Path('data/exclusions.json')
+if exclusions_file.exists():
+    with open(exclusions_file, 'r') as f:
+        exclusions = json.load(f)
+    print(f"📋 除外リスト読み込み: {len(exclusions['videos'])}件の動画, {len(exclusions['patterns'])}件のパターン")
+
 # スコア辞書化
 mv_dict = {item['id']: item for item in mv_scores}
 jp_dict = {item['id']: item for item in japan_scores}
+
+# 除外動画IDセット
+excluded_video_ids = {v['video_id'] for v in exclusions['videos']}
 
 # マージ
 results = {
@@ -123,6 +143,36 @@ for video in videos:
 
     mv_score = mv_data.get('mv_score', 0)
     jp_score = jp_data.get('japan_score', 0)
+
+    # 除外リストチェック
+    if vid in excluded_video_ids:
+        results['excluded'].append({
+            'id': vid,
+            'title': video['snippet']['title'],
+            'reason': '除外リストに登録済み'
+        })
+        continue
+
+    # パターンマッチングでスコア調整
+    title = video['snippet']['title']
+    channel = video['snippet']['channelTitle']
+
+    for pattern in exclusions['patterns']:
+        pattern_type = pattern.get('pattern_type')
+        pattern_regex = pattern.get('pattern')
+        penalty = pattern.get('score_penalty', 0)
+
+        if pattern_type == 'channel_name' and re.search(pattern_regex, channel):
+            mv_score += penalty
+            print(f"  🔧 {channel}: MVスコア {penalty:+d}点調整")
+        elif pattern_type == 'title_keyword' and re.search(pattern_regex, title):
+            mv_score += penalty
+            print(f"  🔧 {title}: MVスコア {penalty:+d}点調整")
+
+    # スコアリングルール適用
+    for rule in exclusions.get('scoring_rules', {}).get('rules', []):
+        # TODO: ルール適用ロジックを実装
+        pass
 
     # Shorts除外
     if mv_score < 0:  # Shortsは-100点
@@ -213,6 +263,42 @@ print(f"  - 要確認: {len(results['candidates'])}件")
 
 例: `docs/260108/mv_14.md` (2026年1月8日14時実行分)
 
+#### 4.3 アノテーション用Issue作成/更新
+
+レポート生成後、当日のアノテーション用Issueを作成または更新します。
+
+**実行方法**:
+```bash
+# Issue作成スクリプトを実行
+python3 scripts/create_annotation_issue.py {YYMMDD}
+
+# 当日のIssueを検索
+ISSUE_NUMBER=$(gh issue list --label "mv-annotation" --search "in:title [MV Annotation] {YYYY-MM-DD}" --json number --jq '.[0].number')
+
+if [ -z "$ISSUE_NUMBER" ]; then
+  # 新規作成
+  gh issue create --title "[MV Annotation] {YYYY-MM-DD} の動画レビュー" \
+    --body-file /tmp/issue_body_{YYMMDD}.md \
+    --label "mv-annotation,needs-review"
+else
+  # 既存Issueに追記
+  CURRENT_BODY=$(gh issue view $ISSUE_NUMBER --json body --jq '.body')
+  NEW_SECTION=$(cat /tmp/issue_body_{YYMMDD}.md | sed -n '/^## /,$p')
+
+  echo "$CURRENT_BODY" > /tmp/updated_body.md
+  echo "" >> /tmp/updated_body.md
+  echo "$NEW_SECTION" >> /tmp/updated_body.md
+
+  gh issue edit $ISSUE_NUMBER --body-file /tmp/updated_body.md
+fi
+```
+
+**完了メッセージ**:
+```
+✅ アノテーション用Issue更新完了
+  Issue: #{ISSUE_NUMBER}
+```
+
 ## 採用基準（2軸スコアリング）
 
 ```
@@ -282,6 +368,18 @@ A. `/youtube-mv-score-mv`のv3.2でAI生成検出を追加しました。説明�
 A. v3.1で正規表現による厳格化を実施。「制作によせて」等の文章では加点されません。
 
 ## 改善履歴
+
+### v4.0 (2026-01-09)
+- アノテーション機能追加
+  - GitHub Issue経由で除外動画を収集
+  - 1日単位でIssue作成、毎時追記
+  - ラベル変更（`needs-review` → `reviewed`）で自動処理
+- 除外リスト（data/exclusions.json）導入
+  - 動画ID、パターン、スコアリング調整ルールを管理
+  - スコアマージ時に自動適用
+- scripts/create_annotation_issue.py 追加
+- scripts/process_annotations.py 追加
+- .github/workflows/process-annotations.yml 追加
 
 ### v3.6 (2026-01-08)
 - レポート生成の指示を明確化

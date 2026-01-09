@@ -1,0 +1,10 @@
+{
+  "version": "1.0",
+  "last_updated": null,
+  "videos": [],
+  "patterns": [],
+  "scoring_rules": {
+    "description": "動的に学習したスコアリング調整ルール",
+    "rules": []
+  }
+}
