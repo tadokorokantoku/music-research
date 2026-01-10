@@ -1,0 +1,51 @@
+name: Create Daily MV Annotation Issue
+
+on:
+  schedule:
+    # 毎日 JST 23:00 (UTC 14:00) に実行
+    - cron: "0 14 * * *"
+  workflow_dispatch: # 手動実行も可能
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  create-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get current date (JST)
+        id: date
+        run: |
+          # JST (UTC+9) で今日の日付を取得
+          DATE=$(TZ=Asia/Tokyo date +%y%m%d)
+          echo "date=$DATE" >> $GITHUB_OUTPUT
+          echo "📅 Creating issue for: $DATE"
+
+      - name: Create issue body
+        id: create_body
+        run: |
+          chmod +x scripts/create_annotation_issue.py
+          OUTPUT_FILE=$(python3 scripts/create_annotation_issue.py ${{ steps.date.outputs.date }})
+          echo "output_file=$OUTPUT_FILE" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub issue
+        if: success()
+        run: |
+          DATE=${{ steps.date.outputs.date }}
+          BODY_FILE=${{ steps.create_body.outputs.output_file }}
+
+          if [ -f "$BODY_FILE" ]; then
+            gh issue create \
+              --title "🎵 MV Annotation - $DATE" \
+              --body-file "$BODY_FILE" \
+              --label "mv-annotation,needs-review"
+            echo "✅ Issue created successfully"
+          else
+            echo "⚠️ No issue body found - skipping issue creation"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
