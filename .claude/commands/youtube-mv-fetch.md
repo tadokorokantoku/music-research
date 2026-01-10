@@ -28,7 +28,6 @@ YouTube Data APIを使って音楽MV候補を取得し、JSONファイルとし�
 検索クエリ: ["MV", "Music Video", "Official Video"]
 ページ数: 1ページ/クエリ (50件)
 パラメータ:
-  - videoCategoryId: 10 (音楽)
   - regionCode: JP
   - relevanceLanguage: ja
   - publishedAfter: 現在時刻から hours 時間前 (UTC)
