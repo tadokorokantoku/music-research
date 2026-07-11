@@ -39,7 +39,9 @@ def parse_report(file_path: Path) -> Dict:
 
         # Parse video line
         if current_section and line.startswith('| ') and re.match(r'\| \d+ \|', line):
-            parts = [p.strip() for p in line.split('|')]
+            # Split on unescaped '|' only, so literal pipes in titles (escaped as \|) don't shift columns
+            raw_parts = re.split(r'(?<!\\)\|', line)
+            parts = [p.strip().replace('\\|', '|') for p in raw_parts]
             if len(parts) >= 11:
                 video = {
                     'title': parts[2],
@@ -66,7 +68,9 @@ def format_section(title: str, hour: str, videos: List[Dict]) -> str:
     md += "|------|---------|----------|-----|-----|--------|----------|\n"
 
     for v in videos:
-        md += f"| [ ] | {v['title']} | {v['channel']} | {v['mv_score']} | {v['jp_score']} | {v['link']} | <!-- ここに理由を記入 --> |\n"
+        title = v['title'].replace('|', '\\|')
+        channel = v['channel'].replace('|', '\\|')
+        md += f"| [ ] | {title} | {channel} | {v['mv_score']} | {v['jp_score']} | {v['link']} | <!-- ここに理由を記入 --> |\n"
 
     md += "\n---\n\n"
     return md
